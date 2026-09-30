@@ -1,0 +1,25 @@
+[project]
+name = "sales-insights-mcp"
+version = "0.1.0"
+description = "MCP server that lets an AI agent explore a business database and answer sales/analytics questions."
+requires-python = ">=3.10"
+dependencies = ["mcp>=2.0", "sqlalchemy>=2.0"]
+
+[project.optional-dependencies]
+postgres = ["psycopg[binary]>=3.1"]
+mysql = ["pymysql>=1.1"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+sales-insights-mcp = "sales_insights_mcp.server:main"
+sales-insights-seed = "sales_insights_mcp.seed:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
