@@ -19,6 +19,20 @@ Read-only is enforced twice: SQL is validated (single `SELECT`/`WITH`, no write 
 (SQLite `query_only`, Postgres/MySQL `READ ONLY` transactions, with statement timeouts). Results are capped at `MAX_ROWS` (default 500).
 **Still connect with a dedicated read-only DB user** — that's the real security boundary. Consider pointing it at a replica or reporting views.
 
+## PostgreSQL
+Create a least-privilege role (recommended; ideally on a read replica):
+```sql
+CREATE ROLE analyst LOGIN PASSWORD '...';
+GRANT CONNECT ON DATABASE sales TO analyst;
+GRANT USAGE ON SCHEMA public TO analyst;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO analyst;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO analyst;
+ALTER ROLE analyst SET default_transaction_read_only = on;
+-- optional: hide sensitive columns by granting column-level SELECT instead, or expose views
+```
+Then `DATABASE_URL=postgresql+psycopg://analyst:...@host:5432/sales`. Add `?sslmode=require` for managed DBs (RDS, Supabase, Neon...).
+Postgres integration tests: `PG_TEST_URL=postgresql+psycopg://user@localhost/testdb pytest` (seeds demo tables, so use a scratch DB).
+
 ## Setup
 ```bash
 python -m venv .venv && . .venv/bin/activate
@@ -29,7 +43,7 @@ sales-insights-seed demo_sales.db
 DATABASE_URL=sqlite:///demo_sales.db sales-insights-mcp
 ```
 
-Config (env vars): `DATABASE_URL` (SQLAlchemy URL, e.g. `postgresql+psycopg://user:pw@host/db`), `MAX_ROWS`, `STATEMENT_TIMEOUT_MS`,
+Config (env vars): `DATABASE_URL` (SQLAlchemy URL, e.g. `postgresql+psycopg://user:pw@host/db`), `DB_SCHEMA` (Postgres schema to expose, default `public`), `MAX_ROWS`, `STATEMENT_TIMEOUT_MS`,
 `MCP_TRANSPORT` (`stdio` default, or `streamable-http`).
 
 ### Claude Desktop / Claude Code

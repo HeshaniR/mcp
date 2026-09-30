@@ -10,11 +10,16 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
 
 MAX_ROWS = int(os.environ.get("MAX_ROWS", "500"))
+DB_SCHEMA = os.environ.get("DB_SCHEMA") or None  # e.g. "sales" (Postgres schema)
 STATEMENT_TIMEOUT_MS = int(os.environ.get("STATEMENT_TIMEOUT_MS", "15000"))
 
+# Backstop only: the session is also read-only. Kept narrow so common analytics
+# functions (e.g. REPLACE(), string ops) are not rejected.
 _FORBIDDEN = re.compile(
-    r"\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|replace|"
-    r"merge|attach|detach|pragma|vacuum|copy|call|exec|execute|set|lock)\b",
+    r"\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|"
+    r"attach|detach|pragma|vacuum|copy|call|execute|into|"
+    r"set_config|pg_read_file|pg_read_binary_file|pg_ls_dir|pg_terminate_backend|"
+    r"pg_cancel_backend|lo_import|lo_export|dblink\w*|pg_sleep\w*)\b",
     re.IGNORECASE,
 )
 
@@ -72,6 +77,8 @@ class Database:
         elif self.dialect == "postgresql":
             conn.exec_driver_sql("SET TRANSACTION READ ONLY")
             conn.exec_driver_sql(f"SET LOCAL statement_timeout = {STATEMENT_TIMEOUT_MS}")
+            if DB_SCHEMA:
+                conn.exec_driver_sql(f"SET LOCAL search_path = {self.quote(DB_SCHEMA)}, public")
         elif self.dialect in ("mysql", "mariadb"):
             conn.exec_driver_sql("SET SESSION TRANSACTION READ ONLY")
             if self.dialect == "mysql":
@@ -94,23 +101,23 @@ class Database:
 
     def list_tables(self) -> list[dict[str, Any]]:
         insp = inspect(self.engine)
-        out = []
-        for name in sorted(insp.get_table_names()) + sorted(insp.get_view_names()):
-            out.append({"name": name, "kind": "table" if name in insp.get_table_names() else "view"})
-        return out
+        tables = sorted(insp.get_table_names(schema=DB_SCHEMA))
+        views = sorted(insp.get_view_names(schema=DB_SCHEMA))
+        return [{"name": n, "kind": "table"} for n in tables] + [{"name": n, "kind": "view"} for n in views]
 
     def describe_table(self, table: str) -> dict[str, Any]:
         insp = inspect(self.engine)
-        if table not in insp.get_table_names() and table not in insp.get_view_names():
+        known = insp.get_table_names(schema=DB_SCHEMA) + insp.get_view_names(schema=DB_SCHEMA)
+        if table not in known:
             raise ValueError(f"Unknown table '{table}'. Call list_tables first.")
         cols = [
             {"name": c["name"], "type": str(c["type"]), "nullable": c["nullable"]}
-            for c in insp.get_columns(table)
+            for c in insp.get_columns(table, schema=DB_SCHEMA)
         ]
-        pk = insp.get_pk_constraint(table).get("constrained_columns", [])
+        pk = insp.get_pk_constraint(table, schema=DB_SCHEMA).get("constrained_columns", [])
         fks = [
             {"columns": fk["constrained_columns"], "references": f'{fk["referred_table"]}({", ".join(fk["referred_columns"])})'}
-            for fk in insp.get_foreign_keys(table)
+            for fk in insp.get_foreign_keys(table, schema=DB_SCHEMA)
         ]
         return {"table": table, "columns": cols, "primary_key": pk, "foreign_keys": fks}
 
