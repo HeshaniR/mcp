@@ -43,7 +43,17 @@ sales-insights-seed demo_sales.db
 DATABASE_URL=sqlite:///demo_sales.db sales-insights-mcp
 ```
 
-Config (env vars): `DATABASE_URL` (SQLAlchemy URL, e.g. `postgresql+psycopg://user:pw@host/db`), `DB_SCHEMA` (Postgres schema to expose, default `public`), `MAX_ROWS`, `STATEMENT_TIMEOUT_MS`,
+Interactive testing with the [MCP Inspector](https://github.com/modelcontextprotocol/inspector):
+```bash
+npx @modelcontextprotocol/inspector sales-insights-mcp --database-url sqlite:///demo_sales.db
+```
+(or, in the Inspector UI, put `--database-url ...` in the **Arguments** field.)
+
+> MCP clients (including the Inspector) often **don't forward your shell's environment variables** to the server.
+> If tools fail with `DATABASE_URL is not set`, pass it as an argument instead: `sales-insights-mcp --database-url sqlite:///demo_sales.db`
+> (also `--schema`). For sqlite, prefer an absolute path, e.g. `sqlite:////full/path/demo_sales.db`.
+
+Config (env vars or the flags above): `DATABASE_URL` (SQLAlchemy URL, e.g. `postgresql+psycopg://user:pw@host/db`), `DB_SCHEMA` (Postgres schema to expose, default `public`), `MAX_ROWS`, `STATEMENT_TIMEOUT_MS`,
 `MCP_TRANSPORT` (`stdio` default, or `streamable-http`).
 
 ### Claude Desktop / Claude Code

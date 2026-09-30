@@ -1,6 +1,7 @@
 """MCP server exposing a business database to an analytical agent (read-only)."""
 from __future__ import annotations
 
+import argparse
 import functools
 import os
 from typing import Any
@@ -29,7 +30,7 @@ def _guard(fn):
     def wrapper(*a, **kw):
         try:
             return fn(*a, **kw)
-        except (QueryRejected, ValueError) as e:
+        except (QueryRejected, ValueError, RuntimeError) as e:
             raise ToolError(str(e)) from e
         except SQLAlchemyError as e:
             raise ToolError(f"Database error: {getattr(e, 'orig', e)}") from e
@@ -108,6 +109,15 @@ def analyze_sales(question: str = "How is the business performing?") -> str:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Sales Insights MCP server (read-only DB access for agents).")
+    parser.add_argument("--database-url", help="SQLAlchemy URL; overrides DATABASE_URL (useful when the MCP client "
+                                               "does not forward environment variables).")
+    parser.add_argument("--schema", help="Postgres schema to expose; overrides DB_SCHEMA.")
+    args = parser.parse_args()
+    if args.database_url:
+        os.environ["DATABASE_URL"] = args.database_url
+    if args.schema:
+        os.environ["DB_SCHEMA"] = args.schema
     transport = os.environ.get("MCP_TRANSPORT", "stdio")
     mcp.run(transport=transport)  # type: ignore[arg-type]
 
